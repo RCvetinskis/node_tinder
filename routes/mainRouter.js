@@ -7,8 +7,9 @@ const {
   stayLogedin,
   logOut,
   filterMatches,
-  allUsers,
   like,
+  dislike,
+  showLikedUsers,
 } = require("../controllers/mainController");
 const {
   validateRegistration,
@@ -20,8 +21,9 @@ router.post("/login", login);
 router.get("/stay-logedin", stayLogedin);
 router.get("/logout", logOut);
 router.post("/addPicutres", validatePicture, addPicutres);
-router.get("/allUsers", allUsers);
 router.post("/filterMatches", filterMatches);
 router.post("/like", like);
+router.post("/dislike", dislike);
+router.post("/showLikedUsers", showLikedUsers);
 
 module.exports = router;

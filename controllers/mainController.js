@@ -2,9 +2,6 @@ const response = require("../modules/response");
 const userDb = require("../schemas/tinderUsersSchema");
 const bcrypt = require("bcrypt");
 
-let filteredUsers = [];
-let deletedUsers = [];
-
 module.exports = {
   register: async (req, res) => {
     const { username, passOne, age, city, gender, preference } = req.body;
@@ -25,13 +22,28 @@ module.exports = {
   login: async (req, res) => {
     const { username, password } = req.body;
     const user = await userDb.findOne({ username });
+    const users = await userDb.find();
+
     if (user) {
+      const filteredArray = users.filter(
+        (obj) =>
+          obj.city === user.city &&
+          obj.gender === user.preference &&
+          obj.password !== user.password &&
+          // removes from array already liked people
+          !user.likes.includes(obj._id)
+      );
       const compare = await bcrypt.compare(password, user.password);
       if (compare) {
         // saves user to session
         req.session.user = user;
-
-        return response(res, "You are loggedin", false, user);
+        // sends current users to front and all users filtered by his intersts
+        return res.send({
+          message: "succsefully loged in",
+          error: false,
+          user,
+          users: filteredArray,
+        });
       }
       return response(res, "password do not match", true);
     }
@@ -64,20 +76,15 @@ module.exports = {
           "https://cdn-icons-png.flaticon.com/512/1053/1053244.png?w=360"
         )
       ) {
-        user.pictures.shift();
+        // replaces 1 element at 0 index
+        user.pictures.splice(0, 1, photo);
+        await user.save();
+      } else {
+        user.pictures.push(photo);
+        await user.save();
       }
-      user.pictures.push(photo);
-      await user.save();
-      return response(res, "Photo saved", false, user);
-    }
-    return response(res, "something went wrong", true);
-  },
 
-  allUsers: async (req, res) => {
-    const users = await userDb.find();
-    allUsers = users;
-    if (users) {
-      return response(res, "all users", false, users);
+      return response(res, "Photo saved", false, user);
     }
     return response(res, "something went wrong", true);
   },
@@ -92,8 +99,11 @@ module.exports = {
         obj.city === city &&
         obj.gender === preference &&
         obj.age <= age &&
-        obj.password !== user.password
+        obj.password !== user.password &&
+        // removes from array already liked people
+        !user.likes.includes(obj._id)
     );
+
     filteredUsers = filteredArray;
     if (users) {
       if (filteredArray.length === 0) {
@@ -109,30 +119,57 @@ module.exports = {
     const { myUserId, likedUserId } = req.body;
     // finds current user
     const user = await userDb.findOne({ _id: myUserId });
-    // finds likedUser
     const likedUser = await userDb.findOne({ _id: likedUserId });
-    // // pushes liked users to like arr
-    user.likes.push(likedUser);
-    await user.save();
-    // checks if user has filtered users
-    if (filteredUsers.length === 0) {
-      const users = await userDb.find();
-
-      const userIndex = users.findIndex(
-        (x) => x.password === likedUser.password
-      );
-      // deletes liked users from users array and sends updated arr to front
-      const deletedUsersArr = users.slice(userIndex);
-      // deleted users clone
-      deletedUsers = deletedUsersArr;
-      return response(
-        res,
-        "liked user removed from array",
-        false,
-        deletedUsers
-      );
+    // saves users to like array
+    if (user.likes.includes(likedUserId)) {
+      return response(res, "user already is liked", true);
+    } else {
+      // // pushes liked users to like arr
+      user.likes.push(likedUserId);
+      await user.save();
+      // pushes user who liked you to likedBy arr
+      likedUser.likedBy.push(myUserId);
+      await likedUser.save();
+      return response(res, "user likes list updated", false, user);
     }
+  },
+  dislike: async (req, res) => {
+    const { myUserId, dislikedUserId } = req.body;
+    const user = await userDb.findOne({ _id: myUserId });
+    if (user.dislikes.includes(dislikedUserId)) {
+      return response(res, "user already is disliked", true);
+    } else {
+      user.dislikes.push(dislikedUserId);
+      await user.save();
+      return response(res, "your user dislikes list is updated", false, user);
+    }
+  },
+  showLikedUsers: async (req, res) => {
+    // sends users to likes page, filtered users array by likes
+    const { stateValue, likes, likedBy } = req.body;
+    const users = await userDb.find();
 
-    // response(res, "there is no more users", true);
+    if (users) {
+      // checks stateValue
+      if (stateValue === "myLikes") {
+        // filter users from db to show only liked users and sends array to front end
+        const filteredLikesUsers = users.filter((x) => likes.includes(x.id));
+        return response(
+          res,
+          "filtered by mylikes users was sent",
+          false,
+          filteredLikesUsers
+        );
+      } else if (stateValue === "likedBy") {
+        const filteredLikedBy = users.filter((x) => likedBy.includes(x.id));
+        return response(
+          res,
+          "filtered by likedBy users was sent",
+          false,
+          filteredLikedBy
+        );
+      }
+    }
+    return response(res, "something went wrong", true);
   },
 };

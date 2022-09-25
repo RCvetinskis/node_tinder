@@ -39,6 +39,10 @@ const tinderUserSchema = new Schema({
     type: [],
     required: false,
   },
+  dislikes: {
+    type: [],
+    required: false,
+  },
   filteredUsers: {
     type: [],
     required: false,
